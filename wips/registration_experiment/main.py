@@ -43,7 +43,7 @@ def main():
 
     #create data for registration
     synthetic_map, source_mri_mesh = mc.make_synthetic_map_and_source_mri_mesh(preprocessed_mesh,
-                                                                              n_points=n_source_points,
+                                                                              n_points=int(n_source_points),
                                                                               clip_distance=clip_distance,
                                                                               large_amplitude=large_amplitude,
                                                                               large_spacing=large_spacing,
@@ -54,7 +54,7 @@ def main():
                                                                               translation_distance=translation_distance,
                                                                               scaling_range=scaling_range)
     registration_mri_mesh = mc.make_registration_mesh(preprocessed_mesh,
-                                                      n_points=n_registration_points)
+                                                      n_points=int(n_registration_points))
 
     source_mri_case = mp.case_from_mesh(source_mri_mesh, name=f'{root_name}__source_mri')
     registration_mri_case = mp.case_from_mesh(registration_mri_mesh, name=f'{root_name}__registration_mri')
