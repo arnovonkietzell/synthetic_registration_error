@@ -3,7 +3,7 @@
     "num_of_simulations": 1,
     "static_widgets": [
         {
-            "name": "None",
+            "name": "Notes",
             "widget_type": "QLabel"
         }
     ]
