@@ -1,4 +1,10 @@
 {
     "num_of_systems": 1,
-    "static_widgets": []
+    "num_of_simulations": 1,
+    "static_widgets": [
+        {
+            "name": "None",
+            "widget_type": "QLabel"
+        }
+    ]
 }
