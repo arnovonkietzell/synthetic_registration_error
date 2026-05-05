@@ -4,10 +4,12 @@
     "static_widgets": [
         {
             "name": "n_source_points",
-            "widget_type": "QSpinBox",
+            "widget_type": "QDoubleSpinBox",
             "properties": {
                 "min": 1000,
                 "max": 20000,
+                "decimals": 0,
+                "step": 1,
                 "value": 5000
             }
         },
@@ -112,46 +114,13 @@
         },
         {
             "name": "n_registration_points",
-            "widget_type": "QSpinBox",
+            "widget_type": "QDoubleSpinBox",
             "properties": {
                 "min": 1000,
                 "max": 20000,
+                "decimals": 0,
+                "step": 1,
                 "value": 7500
-            }
-        },
-        {
-            "name": "reg_method",
-            "widget_type": "QComboBox",
-            "properties": {
-                "items": [
-                    "rigid landmark",
-                    "affine landmark",
-                    "rigid CPD",
-                    "affine CPD",
-                    "deformable CPD"
-                ],
-                "current_text": "rigid landmark"
-            }
-        },
-        {
-            "name": "fibrosis_transfer_eval",
-            "widget_type": "QCheckBox",
-            "properties": {
-                "checked": false
-            }
-        },
-        {
-            "name": "fibrosis_stats_path",
-            "widget_type": "QLineEdit",
-            "properties": {
-                "text": "path/to/fibrosis/stats.csv"
-            }
-        },
-        {
-            "name": "return_intermediate_meshes",
-            "widget_type": "QCheckBox",
-            "properties": {
-                "checked": false
             }
         }
     ]
