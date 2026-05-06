@@ -27,7 +27,7 @@ which python #save this env python path for later
 - Open EP Workbench and navigate to Work-in-Progress > Marketplace.
 - Select your WIP and press "clone".
 - On the WIP Bar, select Info > Edit. 
-- Set Interpreter as the path to your python environment (from step 2), and Root Dir as the path to `synthetic_registration_error` (this repository). Save these settings.
+- Set Interpreter as the path to your python environment (from step 2), and Root Dir as the path to `synthetic_registration_error` (this repository). Save these settings and close the WIP editor window.
 - You are now ready to run the WIP - check each WIP for individual instructions.
 
 4. Running a WIP outside EP Workbench:
