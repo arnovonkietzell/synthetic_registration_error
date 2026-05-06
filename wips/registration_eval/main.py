@@ -4,9 +4,9 @@ from sre_utils import mesh_preprocessing as mp, experiment_handlers as eh
 
 # Boilerplate to run in debug mode or in EP Workbench WIP environment
 try:
-    source_mri_case = cases[case_1]
-    registration_mri_case = cases[case_2]
-    synthetic_map = cases[case_3]
+    synthetic_map = cases[case_1]
+    source_mri_case = cases[case_2]
+    registration_mri_case = cases[case_3]
     debug = False
 
 except:
