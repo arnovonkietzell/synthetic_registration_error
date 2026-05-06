@@ -12,8 +12,8 @@ try:
 except:
     debug = True
     root_dir = '/Users/s1807328/Desktop/'
-    source_mri_case = openep.load_openep_mat(f'{root_dir}/test__source_mri.mat')
-    registration_mri_case = openep.load_openep_mat(f'{root_dir}/test__registration_mri.mat')
+    source_mri_case = openep.load_openep_mat(f'{root_dir}/test__source_img.mat')
+    registration_mri_case = openep.load_openep_mat(f'{root_dir}/test__registration_img.mat')
     synthetic_map = openep.load_openep_mat(f'{root_dir}/test__synthetic_map.mat')
 
     #output parameters

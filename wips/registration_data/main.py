@@ -50,20 +50,20 @@ def main():
     registration_mri_mesh = mc.make_registration_mesh(preprocessed_mesh,
                                                       n_points=int(n_registration_points))
 
-    source_mri_case = mp.case_from_mesh(source_mri_mesh, name=f'{root_name}__source_mri')
-    registration_mri_case = mp.case_from_mesh(registration_mri_mesh, name=f'{root_name}__registration_mri')
+    source_mri_case = mp.case_from_mesh(source_mri_mesh, name=f'{root_name}__source_img')
+    registration_mri_case = mp.case_from_mesh(registration_mri_mesh, name=f'{root_name}__registration_img')
     synthetic_map_case = mp.case_from_mesh(synthetic_map, name=f'{root_name}__synthetic_map')
     
     # output meshes ready for registration experiment
     if debug:
         openep.io.writers.export_openep_mat(synthetic_map_case, f'{root_dir}/{root_name}__synthetic_map.mat')
-        openep.io.writers.export_openep_mat(source_mri_case, f'{root_dir}/{root_name}__source_mri.mat')
-        openep.io.writers.export_openep_mat(registration_mri_case, f'{root_dir}/{root_name}__registration_mri.mat')
+        openep.io.writers.export_openep_mat(source_mri_case, f'{root_dir}/{root_name}__source_img.mat')
+        openep.io.writers.export_openep_mat(registration_mri_case, f'{root_dir}/{root_name}__registration_img.mat')
 
     else:
         out_cases[f'{root_name}__synthetic_map'] = synthetic_map_case
-        out_cases[f'{root_name}__source_mri'] = source_mri_case
-        out_cases[f'{root_name}__registration_mri'] = registration_mri_case
+        out_cases[f'{root_name}__source_img'] = source_mri_case
+        out_cases[f'{root_name}__registration_img'] = registration_mri_case
 
 if __name__ == "__main__":
     main()
