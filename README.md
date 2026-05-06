@@ -5,7 +5,14 @@ Code to support the creation of synthetic electroanatomic mapping data, and usin
 ## Pre-requisites
 
 - **Conda** (or your preferred Python environment) is installed.
-- The [OpenEP library](https://github.com/openep/openep-py) and its dependencies are installed in your environment.
+- The [OpenEP library](https://github.com/ecci-cvs/openep-py) and its dependencies are installed in your environment:
+
+```bash
+conda create -n sre python=3.10 pip
+git clone https://github.com/ecci-cvs/openep-py
+cd openep-py
+python -m pip install -e .
+```
 - (Recommended) EP Workbench, minimal version `v1.1.0-beta.1-260505`. Download instructions available [here](https://openep.discourse.group/t/downloading-ep-workbench-beta-for-academic-use/149).
 
 ## How to run these WIPs
