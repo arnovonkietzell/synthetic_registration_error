@@ -1,26 +1,23 @@
 import numpy as np
 import pandas as pd
 from copy import deepcopy
-from OpenEPGUI.model.mesh_tools import LandmarkRegistrationModel
-from OpenEPGUI.view.mesh_tools import registration_ui
 from sre_utils.mesh_creators import closest_point_indices
 from sklearn.metrics import f1_score, precision_score, recall_score
 
-
 class RegistrationExperiment:
-    """Orchestrates registration of a synthetic EAM mesh to an MRI mesh and evaluates the result.
+    """Orchestrates registration of a synthetic EAM mesh to an MRI mesh.
 
     Holds three mesh references that serve distinct roles in the pipeline:
 
-    - ``mri_mesh_eval``: ground-truth evaluation mesh used for error and
-      fibrosis metric computation.
+    - ``mri_mesh_eval``: ground-truth evaluation mesh passed to
+      :class:`RegistrationEvaluator` after registration.
     - ``mri_mesh_register``: the mesh actually passed to the registration
       algorithm (may differ in resolution from the eval mesh).
     - ``eam_mesh``: the unregistered EAM mesh (source for registration).
 
     After calling one of the ``register_*`` methods,
-    ``eam_mesh_post_registration`` holds the transformed EAM mesh and the
-    evaluation methods become available.
+    ``eam_mesh_post_registration`` holds the transformed EAM mesh and can be
+    passed to :class:`RegistrationEvaluator` for error and fibrosis metrics.
     """
 
     def __init__(self, mri_mesh_eval, mri_case_register, eam_case_register):
@@ -31,7 +28,7 @@ class RegistrationExperiment:
                 evaluation.  Stored as a copy so downstream processing does not
                 affect it.
             mri_case_register: OpenEP Case whose mesh is used as the
-                registration target.  Must have an ``'IIR'`` field if 
+                registration target.  Must have an ``'IIR'`` field if
                 fibrosis metrics are to be computed.
             eam_case_register: OpenEP Case whose mesh is the registration
                 source (the EAM to be aligned).
@@ -64,6 +61,9 @@ class RegistrationExperiment:
             deformable_params (tuple[float, float]): ``(alpha, beta)``
                 regularisation parameters passed to the deformable CPD solver.
         """
+
+        from OpenEPGUI.view.mesh_tools import registration_ui
+
         mri_points = np.array(self.mri_mesh_register.points)
         eam_points = np.array(self.eam_mesh.points)
 
@@ -112,6 +112,9 @@ class RegistrationExperiment:
             n_landmarks (int): Number of landmark pairs to use, taken from the
                 end of each case's landmark list.
         """
+
+        from OpenEPGUI.model.mesh_tools import LandmarkRegistrationModel
+
         # Take the last n_landmarks points from each case's landmark list
         landmarks_0 = self.mri_case_register.electric.landmark_points.points[-n_landmarks:]
         landmarks_1 = self.eam_case_register.electric.landmark_points.points[-n_landmarks:]
@@ -140,6 +143,44 @@ class RegistrationExperiment:
         case_1_transform.transform(transform_matrix)
 
         self.eam_mesh_post_registration = case_1_transform.create_mesh()
+
+    def save_registered_eam(self, filepath):
+        """Save the post-registration EAM mesh to disk.
+
+        Args:
+            filepath (str): Destination file path.  The format is inferred from
+                the file extension (e.g. ``'.vtk'``, ``'.vtp'``).
+
+        Raises:
+            ValueError: If ``register_cpd`` or ``register_landmarks`` has not
+                been called yet.
+        """
+        if self.eam_mesh_post_registration is not None:
+            self.eam_mesh_post_registration.save(filepath)
+        else:
+            raise ValueError("EAM mesh has not been registered yet.")
+
+
+class RegistrationEvaluator:
+    """Evaluates the quality of a completed EAM-to-MRI registration.
+
+    Takes the three mesh objects produced by :class:`RegistrationExperiment`
+    after registration and provides methods for computing registration error
+    and fibrosis classification metrics.
+
+    Args:
+        eam_mesh_post_registration: PyVista mesh of the EAM after registration.
+        mri_mesh_eval: Ground-truth PyVista mesh used for error and fibrosis
+            metric computation.
+        mri_mesh_register: PyVista mesh that was used as the registration
+            target; must carry an ``'IIR'`` point-data field for fibrosis
+            metrics.
+    """
+
+    def __init__(self, eam_mesh_post_registration, mri_mesh_eval, mri_mesh_register):
+        self.eam_mesh_post_registration = eam_mesh_post_registration
+        self.mri_mesh_eval = mri_mesh_eval
+        self.mri_mesh_register = mri_mesh_register
 
     def closest_reg_points(self):
         """Find the closest point on the MRI registration mesh for each post-registration EAM point.
@@ -173,38 +214,6 @@ class RegistrationExperiment:
         self.eam_mesh_post_registration.point_data['Registration Error'] = distances
 
         return distances
-
-    def save_registered_eam(self, filepath):
-        """Save the post-registration EAM mesh to disk.
-
-        Args:
-            filepath (str): Destination file path.  The format is inferred from
-                the file extension (e.g. ``'.vtk'``, ``'.vtp'``).
-
-        Raises:
-            ValueError: If ``register_cpd`` or ``register_landmarks`` has not
-                been called yet.
-        """
-        if self.eam_mesh_post_registration is not None:
-            self.eam_mesh_post_registration.save(filepath)
-        else:
-            raise ValueError("EAM mesh has not been registered yet.")
-
-    def save_error_map(self, filepath):
-        """Save the post-registration EAM mesh with the registration error field to disk.
-
-        Args:
-            filepath (str): Destination file path.  The format is inferred from
-                the file extension.
-
-        Raises:
-            ValueError: If ``calculate_registration_error`` has not been called
-                yet.
-        """
-        if 'Registration Error' in self.eam_mesh_post_registration.point_data:
-            self.eam_mesh_post_registration.save(filepath)
-        else:
-            raise ValueError("Registration error map has not been calculated yet.")
 
     def fibrosis_prediction_metrics(self, fibrosis_threshold=1.2, save_path=None):
         """Evaluate fibrosis classification accuracy against the ground-truth IIR field.
