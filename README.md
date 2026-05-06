@@ -1,52 +1,50 @@
 # Synthetic Registration Error
 
-Code to support the creation of synthetic electroanatomic mapping data, and using these synthetic maps to calculate Synthetic Registration Error (SRE). This is a source library of utilities, execution is via WIPs available at EP Workbench's [Work-In-Progress marketplace](link): 
+Code to support the creation of synthetic electroanatomic mapping data, and using these synthetic maps to calculate Synthetic Registration Error (SRE). This repository contains both a source library of utilities `sre_utils` and a collection `wips` of WIP modules designed to be run in the EP Workbench software. 
 
 ## Pre-requisites
 
 - **Conda** (or your preferred Python environment) is installed.
-- The [OpenEP library](link) and its dependencies are installed in your environment. To install `openep` and its dependencies in a new environment name `sre`:
+- The [OpenEP library](https://github.com/openep/openep-py) and its dependencies are installed in your environment.
+- (Recommended) EP Workbench, minimal version `v1.1.0-beta.1-260505`. Download instructions available [here](https://openep.discourse.group/t/downloading-ep-workbench-beta-for-academic-use/149).
 
-```bash
-conda create -n sre python=3.10 pip
-conda activate sre
-
-git clone git@github.com:ecci-cvs/openep-py.git
-cd openep-py
-python -m pip install -e .
-```
-
-## How to Install a WIP
+## How to run these WIPs
 
 1. Ensure all pre-requisites are installed on your computer (see above).
 
-2. Clone this repository:
+2. Clone this repository and install requirements:
 
 ```bash
-git clone <repository-url>
-```
-   
-3. Go to the directory you just cloned and do the following:
-
-```bash
+conda activate sre
+git clone https://github.com/arnovonkietzell/synthetic_registration_error
+cd synthetic_registration_error
 pip install -r requirements.txt
-
+which python #save this env python path for later
 ```
-Your conda environment is now ready!
 
-## Defining boundaries for clipping 
+3. Running a WIP through EP Workbench:
 
-This is an optional preprocessing step if automatic clipping of mesh boundaries is desired, e.g. to test the effect of boundary inconsistency on registration. The input should be a cardiac surface `.vtk` file, loaded into EP Workbench. Use EP Workbench's `Region selector` tool, together with the `calculate_boundary_distance` WIP, to define boundaries and calculate distances from these boundaries (used for automatic clipping at any given distance). More details [here](link).
+- Open EP Workbench and navigate to Work-in-Progress > Marketplace.
+- Select your WIP and press "clone".
+- On the WIP Bar, select Info > Edit. 
+- Set Interpreter as the path to your python environment (from step 2), and Root Dir as the path to `synthetic_registration_error` (this repository). Save these settings.
+- You are now ready to run the WIP - check each WIP for individual instructions.
 
-## Defining noise regions
+4. Running a WIP outside EP Workbench:
 
-This is an optional preprocessing step if region-dependent noise is desired, e.g. a larger noise amplitude in the appendage to simulate incomplete mapping. The input should be a cardiac surface `.vtk` file, loaded into EP Workbench. Use EP Workbench's `Region selector` tool, together with the `noise_regions` WIP, to define regions for specifiying independent noise fields. More details [here](link).
+It is possible to run these WIPs in `debug` mode outside EP Workbench. However, any workflows relying on graphical interaction with the data (e.g. selection boundaries to clip, landmark points for registration) require EP Workbench. To run in `debug` mode requires you to open the WIP's `main.py` code and edit `root_dir` to your preferred input/output directory. Then:
 
-## Visualising synthetic data creation 
+```bash
+conda activate sre
+cd synthetic_registration_error
+python -m wips.<wip_name>.main
+```
 
-This step opens a GUI visualising the creation of synthetic data, and the effect of different parameters. It allows tuning of synthetic data parameters by visually comparing synthetic electroanatomic maps with real maps, possibly from the same patient. The input should be a cardiac surface mesh, loaded into EP Workbench. If automatic boundary clipping and/or region-dependent noise is desired, this mesh should have been preprocessed as described above. Use the `parameter_tuning_GUI` WIP to interactively create a synthetic map from this mesh. More details [here](link).
+## Overview of WIPs ##
+Here is a brief overview of the WIPs included in this repository. For more information refer to the individual WIP `README`s.
 
-## Running registration experiment 
-
-This allows end-to-end calculation of a Synthetic Registration Error field from a cardiac surface. The input should be a cardiac surface mesh, loaded into EP Workbench. If automatic boundary clipping and/or region-dependent noise is desired, this mesh should have been preprocessed as described above. Also, if fibrosis transfer metrics are to be quantified, the mesh should contain an 'IIR' field as point data. Use the `registration_experiment` WIP to create synthetic mapping data, register this to the original geometry, and calculate Synthetic Registration Error (saved as a field on the registered mesh). More details [here](link).
-
+- `noise_regions`: This is an optional pre-processing step, necessary if region-dependent noise is desired in the synthetic electroanatomic map.
+- `calculate_boundary_distance`: This is an optional pre-processing step, necessary if automatic clipping of mesh boundaries is desired.
+- `parameter_tuning_gui`: This is an optional visualisation step, allowing viewers to interactively probe the effect of different parameters on the synthetic electroanatomic map output.
+- `registration_data`: This step creates three meshes necessary for evaluation of Synthetic Registration Error: a synthetic map, an image source mesh, and an image registration mesh.
+- `registration_eval`: Following registration of the synthetic map with the image registration mesh using EP Workbench, this step calculates the Synthetic Registration Error field, and optionally evaluates the accuracy of fibrosis transfer.
