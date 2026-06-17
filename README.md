@@ -9,6 +9,7 @@ Code to support the creation of synthetic electroanatomic mapping data, and usin
 
 ```bash
 conda create -n sre python=3.10 pip
+conda activate sre
 git clone https://github.com/ecci-cvs/openep-py
 cd openep-py
 python -m pip install -e .
