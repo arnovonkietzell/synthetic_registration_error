@@ -15,9 +15,14 @@ class RegistrationExperiment:
       algorithm (may differ in resolution from the eval mesh).
     - ``eam_mesh``: the unregistered EAM mesh (source for registration).
 
-    After calling one of the ``register_*`` methods,
-    ``eam_mesh_post_registration`` holds the transformed EAM mesh and can be
-    passed to :class:`RegistrationEvaluator` for error and fibrosis metrics.
+    Registration is performed by one of ``register_cpd`` (Coherent Point
+    Drift), ``register_icp`` (Iterative Closest Point), or
+    ``register_landmarks`` (paired landmark points), all backed by
+    :mod:`openep.case.registration`. After calling one of these
+    ``register_*`` methods, ``eam_mesh_post_registration`` holds the
+    transformed EAM mesh and ``registration_transform`` holds the fitted
+    :class:`openep.case.transforms.Transform`; the mesh can be passed to
+    :class:`RegistrationEvaluator` for error and fibrosis metrics.
     """
 
     def __init__(self, mri_mesh_eval, mri_case_register, eam_case_register):
@@ -44,8 +49,19 @@ class RegistrationExperiment:
         self.eam_mesh = eam_case_register.create_mesh()
 
         self.eam_mesh_post_registration = None  # Populated by a register_* call
+        self.registration_transform = None  # openep.case.transforms.Transform fitted by the last register_* call
 
-    def register_cpd(self, method, n_iter=50, prereg_rigid=False, deformable_params=(0.1, 0.1)):
+    def register_cpd(
+        self,
+        method,
+        n_iter=50,
+        prereg_rigid=False,
+        deformable_params=(0.1, 0.1),
+        verbose=False,
+        decimate=False,
+        decimate_n_points=1000,
+        decimate_method='pyvista',
+    ):
         """Register the EAM mesh to the MRI mesh using Coherent Point Drift (CPD).
 
         Optionally applies a rigid pre-registration pass before the main
@@ -54,48 +70,128 @@ class RegistrationExperiment:
 
         Args:
             method (str): CPD variant for the main registration step, e.g.
-                ``'rigid'``, ``'affine'``, or ``'deformable'``.
+                ``'rigid'``, ``'similarity'``, ``'affine'``, or ``'deformable'``.
             n_iter (int): Number of optimisation steps for each CPD pass.
             prereg_rigid (bool): If ``True``, run a rigid CPD pass on the EAM
                 points before the main registration.
             deformable_params (tuple[float, float]): ``(alpha, beta)``
                 regularisation parameters passed to the deformable CPD solver.
+                Ignored unless ``method == 'deformable'``.
+            verbose (bool): If ``True``, print iteration progress for each
+                CPD pass.
+            decimate (bool): If ``True``, fit each CPD pass on decimated
+                copies of the EAM/MRI meshes instead of their full-resolution
+                points, then apply the fitted transform back to the
+                full-resolution EAM mesh. Much faster on dense meshes - see
+                :class:`openep.case.registration.CPDRegistration`.
+            decimate_n_points (int): Target point count for the decimated
+                working copies. Ignored unless ``decimate=True``.
+            decimate_method (str): Decimation method to use - see
+                :func:`openep.mesh.decimation.decimate_mesh`. Ignored unless
+                ``decimate=True``.
         """
 
-        from OpenEPGUI.view.mesh_tools import registration_ui
+        from openep.case.registration import CPDRegistration
+
+        mri_mesh = self.mri_mesh_register
+        eam_mesh = self.eam_mesh
+        decimate_kwargs = dict(
+            decimate=decimate,
+            decimate_n_points=decimate_n_points,
+            decimate_method=decimate_method,
+        )
+
+        # Optional rigid pre-registration to bring the meshes into rough alignment
+        if prereg_rigid:
+            prereg_transform = CPDRegistration(
+                source_points=eam_mesh.points,
+                target_points=mri_mesh.points,
+                method='rigid',
+                n_iterations=n_iter,
+                source_mesh=eam_mesh,
+                target_mesh=mri_mesh,
+                progress_callback=self._cpd_progress_printer('prereg-rigid', n_iter) if verbose else None,
+                **decimate_kwargs,
+            ).run()
+
+            eam_mesh = eam_mesh.copy()
+            eam_mesh.points = prereg_transform.apply(eam_mesh.points)
+
+        # Main CPD registration pass, fit on the (possibly pre-registered) EAM mesh
+        cpd_kwargs = {'alpha': deformable_params[0], 'beta': deformable_params[1]} if method == 'deformable' else {}
+        transform = CPDRegistration(
+            source_points=eam_mesh.points,
+            target_points=mri_mesh.points,
+            method=method,
+            n_iterations=n_iter,
+            source_mesh=eam_mesh,
+            target_mesh=mri_mesh,
+            progress_callback=self._cpd_progress_printer(method, n_iter) if verbose else None,
+            **decimate_kwargs,
+            **cpd_kwargs,
+        ).run()
+
+        self._apply_registration_transform(transform, base_mesh=eam_mesh)
+
+    @staticmethod
+    def _cpd_progress_printer(stage, n_iter):
+        """Build a `progress_callback` for `CPDRegistration` that prints iteration progress."""
+
+        def callback(iteration, source_points):
+            print(f"[CPD:{stage}] iteration {iteration}/{n_iter}")
+
+        return callback
+
+    def register_icp(self, method='rigid', max_iterations=100, max_correspondence_distance=None):
+        """Register the EAM mesh to the MRI mesh using Iterative Closest Point (ICP).
+
+        The result is stored in ``self.eam_mesh_post_registration``.
+
+        Args:
+            method (str): ``'rigid'`` (translation and rotation only) or
+                ``'similarity'`` (translation, rotation, and isotropic
+                scaling).
+            max_iterations (int): Maximum number of ICP iterations.
+            max_correspondence_distance (float, optional): Maximum distance
+                between a source/target point pair for it to be treated as a
+                correspondence. Defaults to 10% of the MRI mesh's
+                bounding-box diagonal (see
+                :class:`openep.case.registration.ICPRegistration`).
+        """
+
+        from openep.case.registration import ICPRegistration
 
         mri_points = np.array(self.mri_mesh_register.points)
         eam_points = np.array(self.eam_mesh.points)
 
-        # Optional rigid pre-registration to bring the meshes into rough alignment
-        if prereg_rigid:
-            pars = {
-                    'pars': {
-                        'method': 'rigid',
-                        'n_steps': n_iter,
-                        'kwargs': {}
-                    }
-            }
-            w = registration_ui.CPDRegistrationWorker(pars)
-            eam_points = w.run(conn=None, source_points=eam_points, target_points=mri_points)
+        transform = ICPRegistration(
+            source_points=eam_points,
+            target_points=mri_points,
+            method=method,
+            max_iterations=max_iterations,
+            max_correspondence_distance=max_correspondence_distance,
+        ).run()
 
-        # Main CPD registration pass
-        pars = {
-                'pars': {
-                    'method': method,
-                    'n_steps': n_iter,
-                    'kwargs': {
-                        'alpha': deformable_params[0],
-                        'beta': deformable_params[1],
-                    }
-                }
-        }
-        w = registration_ui.CPDRegistrationWorker(pars)
-        transformed_points = w.run(conn=None, source_points=eam_points, target_points=mri_points)
+        self._apply_registration_transform(transform)
 
-        # Store the registered mesh with updated point positions
-        eam_mesh_transformed = self.eam_mesh.copy()
-        eam_mesh_transformed.points = transformed_points
+    def _apply_registration_transform(self, transform, base_mesh=None):
+        """Apply a fitted Transform to a copy of ``base_mesh`` and store the result.
+
+        Args:
+            transform (openep.case.transforms.Transform): Transform mapping
+                ``base_mesh`` points onto the MRI registration mesh.
+            base_mesh (pyvista.PolyData, optional): Mesh whose points
+                ``transform`` was fitted to map. Defaults to ``self.eam_mesh``
+                - pass an intermediate mesh here if an earlier pass (e.g. a
+                CPD rigid pre-registration) has already been applied ahead of
+                ``transform``.
+        """
+
+        base_mesh = self.eam_mesh if base_mesh is None else base_mesh
+        eam_mesh_transformed = base_mesh.copy()
+        eam_mesh_transformed.points = transform.apply(eam_mesh_transformed.points)
+
+        self.registration_transform = transform
         self.eam_mesh_post_registration = eam_mesh_transformed
 
     def register_landmarks(self, method, n_landmarks=6):
@@ -112,37 +208,24 @@ class RegistrationExperiment:
             n_landmarks (int): Number of landmark pairs to use, taken from the
                 end of each case's landmark list.
         """
-
-        from OpenEPGUI.model.mesh_tools import LandmarkRegistrationModel
+        from openep.case.registration import LandmarkRegistration
 
         # Take the last n_landmarks points from each case's landmark list
         landmarks_0 = self.mri_case_register.electric.landmark_points.points[-n_landmarks:]
         landmarks_1 = self.eam_case_register.electric.landmark_points.points[-n_landmarks:]
 
-        model = LandmarkRegistrationModel()
+        # Fit the transform that maps EAM landmarks onto MRI landmarks
+        transform = LandmarkRegistration(
+            source_points=landmarks_1,
+            target_points=landmarks_0,
+            method=method,
+        ).run()
 
-        # Set exclusive boolean flags to select the transform type
-        if method == 'rigid':
-            model.rigid = True
-            model.similarity = False
-            model.affine = False
+        case_transformed = deepcopy(self.eam_case_register)
+        case_transformed.transform(transform)
 
-        elif method == 'similarity':
-            model.similarity = True
-            model.rigid = False
-            model.affine = False
-
-        elif method == 'affine':
-            model.affine = True
-            model.rigid = False
-            model.similarity = False
-
-        # Compute transform that maps EAM landmarks onto MRI landmarks
-        transform_matrix = model.get_transform_matrix(landmarks_1, landmarks_0)
-        case_1_transform = deepcopy(self.eam_case_register)
-        case_1_transform.transform(transform_matrix)
-
-        self.eam_mesh_post_registration = case_1_transform.create_mesh()
+        self.registration_transform = transform
+        self.eam_mesh_post_registration = case_transformed.create_mesh()
 
     def save_registered_eam(self, filepath):
         """Save the post-registration EAM mesh to disk.
@@ -152,8 +235,8 @@ class RegistrationExperiment:
                 the file extension (e.g. ``'.vtk'``, ``'.vtp'``).
 
         Raises:
-            ValueError: If ``register_cpd`` or ``register_landmarks`` has not
-                been called yet.
+            ValueError: If none of the ``register_*`` methods has been
+                called yet.
         """
         if self.eam_mesh_post_registration is not None:
             self.eam_mesh_post_registration.save(filepath)
