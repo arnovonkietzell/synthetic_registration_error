@@ -15,6 +15,13 @@
             "properties": {
                 "text": "path/to/fibrosis/stats.csv"
             }
+        },
+        {
+            "name": "fibrosis_thresholds",
+            "widget_type": "QLineEdit",
+            "properties": {
+                "text": "1.2, 1.32"
+            }
         }
     ]
 }

@@ -215,26 +215,30 @@ class RegistrationEvaluator:
 
         return distances
 
-    def fibrosis_prediction_metrics(self, fibrosis_threshold=1.2, save_path=None):
+    def fibrosis_prediction_metrics(self, fibrosis_thresholds=(1.2,), save_path=None):
         """Evaluate fibrosis classification accuracy against the ground-truth IIR field.
 
-        Maps post-registration EAM points onto the MRI registration mesh,
-        thresholds both predicted and ground-truth IIR values at
-        ``fibrosis_threshold`` to produce binary fibrosis labels, then
+        Maps post-registration EAM points onto the MRI registration mesh, then
+        for each threshold in ``fibrosis_thresholds`` thresholds both predicted
+        and ground-truth IIR values to produce binary fibrosis labels and
         computes Dice coefficient, precision, and recall.
 
-        A ``'Fibrosis Classification'`` field is attached to
-        ``eam_mesh_post_registration`` using the encoding:
-        TN=0, FP=1, FN=2, TP=3.
+        ``'True IIR'`` and ``'Pred IIR'`` fields (the raw, unthresholded
+        values) are attached to ``eam_mesh_post_registration`` to allow
+        post-hoc analysis at arbitrary thresholds. A per-threshold
+        ``'Fibrosis Label (IIR>{threshold})'`` field is also attached
+        using the encoding: TN=0, FP=1, FN=2, TP=3.
 
         Args:
-            fibrosis_threshold (float): IIR value above which a point is
-                classified as fibrotic.
-            save_path (str, optional): If provided, writes results to a
-                single-row CSV at this path.
+            fibrosis_thresholds (Sequence[float]): IIR values above which a
+                point is classified as fibrotic. One set of metrics is
+                computed per threshold.
+            save_path (str, optional): If provided, writes results to a CSV
+                at this path with one row per threshold.
 
         Returns:
-            dict: ``{'Dice Coefficient': float, 'Precision': float,
+            dict: Keyed by threshold, each value a dict of
+            ``{'Dice Coefficient': float, 'Precision': float,
             'Recall': float}``.
         """
         # Map EAM post-registration points to their nearest neighbours on the MRI mesh
@@ -244,26 +248,38 @@ class RegistrationEvaluator:
         true_iir = self.mri_mesh_eval.point_data['IIR']
         pred_iir = self.mri_mesh_register.point_data['IIR'][closest_points]
 
-        # Threshold IIR to produce binary fibrosis labels
-        true_fibrosis = true_iir >= fibrosis_threshold
-        pred_fibrosis = pred_iir >= fibrosis_threshold
+        self.eam_mesh_post_registration.point_data['True IIR'] = true_iir
+        self.eam_mesh_post_registration.point_data['Pred IIR'] = pred_iir
+        if 'IIR' in self.eam_mesh_post_registration.point_data:
+            self.eam_mesh_post_registration.point_data.remove('IIR')
 
-        # Encode classification outcome: TN=0, FP=1, FN=2, TP=3
-        classification_results = true_fibrosis * 2 + pred_fibrosis
-        self.eam_mesh_post_registration.point_data['Fibrosis Classification'] = classification_results
+        results_by_threshold = {}
+        for fibrosis_threshold in fibrosis_thresholds:
+            # Threshold IIR to produce binary fibrosis labels
+            true_fibrosis = true_iir >= fibrosis_threshold
+            pred_fibrosis = pred_iir >= fibrosis_threshold
 
-        dice = f1_score(true_fibrosis, pred_fibrosis)
-        precision = precision_score(true_fibrosis, pred_fibrosis)
-        recall = recall_score(true_fibrosis, pred_fibrosis)
+            # Encode classification outcome: TN=0, FP=1, FN=2, TP=3
+            classification_results = true_fibrosis * 2 + pred_fibrosis
+            self.eam_mesh_post_registration.point_data[
+                f'Fibrosis Label (IIR>{fibrosis_threshold})'
+            ] = classification_results
 
-        results_dict = {
-            'Dice Coefficient': dice,
-            'Precision': precision,
-            'Recall': recall
-        }
+            dice = f1_score(true_fibrosis, pred_fibrosis)
+            precision = precision_score(true_fibrosis, pred_fibrosis)
+            recall = recall_score(true_fibrosis, pred_fibrosis)
+
+            results_by_threshold[fibrosis_threshold] = {
+                'Dice Coefficient': dice,
+                'Precision': precision,
+                'Recall': recall
+            }
 
         if save_path is not None:
-            results_df = pd.DataFrame([results_dict])
+            results_df = pd.DataFrame([
+                {'IIR Threshold': threshold, **metrics}
+                for threshold, metrics in results_by_threshold.items()
+            ])
             results_df.to_csv(save_path, index=False)
 
-        return results_dict
+        return results_by_threshold

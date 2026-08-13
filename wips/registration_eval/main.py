@@ -17,8 +17,9 @@ except:
     synthetic_map = openep.load_openep_mat(f'{root_dir}/test__synthetic_map.mat')
 
     #output parameters
-    fibrosis_transfer_eval = False
-    fibrosis_stats_path = ('path/to/fibrosis/stats.csv')
+    fibrosis_transfer_eval = True
+    fibrosis_stats_path = (f'{root_dir}/fibrosis_stats.csv')
+    fibrosis_thresholds = '1.2, 1.32'
 
 def main():
 
@@ -34,7 +35,8 @@ def main():
 
     _ = reg.calculate_registration_error()
     if fibrosis_transfer_eval:
-        _ = reg.fibrosis_prediction_metrics(save_path=fibrosis_stats_path)
+        thresholds = [float(t.strip()) for t in fibrosis_thresholds.split(',') if t.strip()]
+        _ = reg.fibrosis_prediction_metrics(fibrosis_thresholds=thresholds, save_path=fibrosis_stats_path)
     
     # output registered mesh as case, along with intermediate meshes if specified
     if debug:
